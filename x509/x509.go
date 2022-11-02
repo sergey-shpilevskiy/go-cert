@@ -13,18 +13,25 @@ import (
 )
 
 type CertGenerator struct {
-	CACertFileName string
-	CAKeyFileName  string
-	CertFileName   string
-	KeyFileName    string
+	path     string
+	notAfter time.Time
+
+	// caCertFileName string
+	// caKeyFileName  string
+	// certFileName   string
+	// keyFileName    string
 }
 
-func NewCertGenerator(caCertFileName, caKeyFileName, certFileName, keyFileName string) *CertGenerator {
+// func NewCertGenerator(caCertFileName, caKeyFileName, certFileName, keyFileName string, notAfter time.Time) *CertGenerator {
+func NewCertGenerator(path string, notAfter time.Time) *CertGenerator {
 	return &CertGenerator{
-		CACertFileName: caCertFileName,
-		CAKeyFileName:  caKeyFileName,
-		CertFileName:   certFileName,
-		KeyFileName:    keyFileName,
+		path:     path,
+		notAfter: notAfter,
+
+		// caCertFileName: caCertFileName,
+		// caKeyFileName:  caKeyFileName,
+		// certFileName:   certFileName,
+		// keyFileName:    keyFileName,
 	}
 }
 
@@ -41,7 +48,7 @@ func (c *CertGenerator) GenerateCA(name pkix.Name) error {
 		SerialNumber:          big.NewInt(1),
 		Subject:               name,
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(24 * time.Hour),
+		NotAfter:              c.notAfter,
 		IsCA:                  true,
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
@@ -56,14 +63,14 @@ func (c *CertGenerator) GenerateCA(name pkix.Name) error {
 	}
 
 	// Save the certificate and private key
-	certOut, err := os.Create(c.CACertFileName)
+	certOut, err := os.Create(c.path + "/ca-cert.pem")
 	if err != nil {
 		return err
 	}
 	defer certOut.Close()
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: caBytes})
 
-	keyOut, err := os.OpenFile(c.CAKeyFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(c.path+"/ca-key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
@@ -76,7 +83,7 @@ func (c *CertGenerator) GenerateCA(name pkix.Name) error {
 // Generate a Certificate
 func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error {
 	// Read the CA certificate and private key
-	caCertPEM, err := os.ReadFile(c.CACertFileName)
+	caCertPEM, err := os.ReadFile(c.path + "/ca-cert.pem")
 	if err != nil {
 		return err
 	}
@@ -86,7 +93,7 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 		return err
 	}
 
-	caKeyPEM, err := os.ReadFile(c.CAKeyFileName)
+	caKeyPEM, err := os.ReadFile(c.path + "/ca-key.pem")
 	if err != nil {
 		return err
 	}
@@ -108,7 +115,7 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 		Subject:      name,
 		IPAddresses:  ipAddresses,
 		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
+		NotAfter:     c.notAfter,
 		SubjectKeyId: []byte{1, 2, 3, 4, 6},
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -121,14 +128,14 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 	}
 
 	// Save the certificate and private key
-	certOut, err := os.Create(c.CertFileName)
+	certOut, err := os.Create(c.path + "/server-cert.pem")
 	if err != nil {
 		return err
 	}
 	defer certOut.Close()
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: serverBytes})
 
-	keyOut, err := os.OpenFile(c.KeyFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(c.path+"/server-key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
