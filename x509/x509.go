@@ -16,27 +16,25 @@ type CertGenerator struct {
 	path     string
 	notAfter time.Time
 
-	// caCertFileName string
-	// caKeyFileName  string
-	// certFileName   string
-	// keyFileName    string
+	CACertificate *x509.Certificate
+	CAPrivateKey  *rsa.PrivateKey
 }
 
-// func NewCertGenerator(caCertFileName, caKeyFileName, certFileName, keyFileName string, notAfter time.Time) *CertGenerator {
 func NewCertGenerator(path string, notAfter time.Time) *CertGenerator {
 	return &CertGenerator{
 		path:     path,
 		notAfter: notAfter,
-
-		// caCertFileName: caCertFileName,
-		// caKeyFileName:  caKeyFileName,
-		// certFileName:   certFileName,
-		// keyFileName:    keyFileName,
 	}
 }
 
+// 1. Generate CA's private key and self-signed certificate
 // Generate a Certificate Authority
 func (c *CertGenerator) GenerateCA(name pkix.Name) error {
+	// Check if the CA already exists
+	if err := c.LoadCA(); err == nil {
+		return nil
+	}
+
 	// Generate a private key for the CA
 	caPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -80,16 +78,21 @@ func (c *CertGenerator) GenerateCA(name pkix.Name) error {
 	return nil
 }
 
-// Generate a Certificate
-func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error {
+// Load the CA certificate and private key
+func (c *CertGenerator) LoadCA() error {
+	if c.CACertificate != nil && c.CAPrivateKey != nil {
+		return nil
+	}
+
 	// Read the CA certificate and private key
 	caCertPEM, err := os.ReadFile(c.path + "/ca-cert.pem")
 	if err != nil {
 		return err
 	}
+
 	caCertBlock, _ := pem.Decode(caCertPEM)
-	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
-	if err != nil {
+
+	if c.CACertificate, err = x509.ParseCertificate(caCertBlock.Bytes); err != nil {
 		return err
 	}
 
@@ -98,8 +101,20 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 		return err
 	}
 	caKeyBlock, _ := pem.Decode(caKeyPEM)
-	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
-	if err != nil {
+
+	if c.CAPrivateKey, err = x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 2. Generate web server's private key and certificate signing request (CSR)
+// 3. Use CA's private key to sign web server's CSR and get back the signed certificate
+// Generate a Certificate
+func (c *CertGenerator) GenerateServerCert(name pkix.Name, ipAddresses []net.IP) error {
+	// Read the CA certificate and private key
+	if err := c.LoadCA(); err != nil {
 		return err
 	}
 
@@ -122,7 +137,7 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 	}
 
 	// Create a new certificate template
-	serverBytes, err := x509.CreateCertificate(rand.Reader, &serverTemplate, caCert, &serverPrivKey.PublicKey, caKey)
+	serverBytes, err := x509.CreateCertificate(rand.Reader, &serverTemplate, c.CACertificate, &serverPrivKey.PublicKey, c.CAPrivateKey)
 	if err != nil {
 		return err
 	}
@@ -141,6 +156,56 @@ func (c *CertGenerator) GenerateCert(name pkix.Name, ipAddresses []net.IP) error
 	}
 	defer keyOut.Close()
 	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(serverPrivKey)})
+
+	return nil
+}
+
+// 4. Generate client's private key and certificate signing request (CSR)
+// 5. Use CA's private key to sign client's CSR and get back the signed certificate
+func (c *CertGenerator) GenerateClientCert(name pkix.Name, ipAddresses []net.IP) error {
+	// Read the CA certificate and private key
+	if err := c.LoadCA(); err != nil {
+		return err
+	}
+
+	// Generate a private key for the client
+	clientPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+
+	// Generate a certificate for the client
+	clientTemplate := x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      name,
+		IPAddresses:  ipAddresses,
+		NotBefore:    time.Now(),
+		NotAfter:     c.notAfter,
+		SubjectKeyId: []byte{1, 2, 3, 4, 6},
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	// Create a new certificate template
+	clientBytes, err := x509.CreateCertificate(rand.Reader, &clientTemplate, c.CACertificate, &clientPrivKey.PublicKey, c.CAPrivateKey)
+	if err != nil {
+		return err
+	}
+
+	// Save the certificate and private key
+	certOut, err := os.Create(c.path + "/client-cert.pem")
+	if err != nil {
+		return err
+	}
+	defer certOut.Close()
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: clientBytes})
+
+	keyOut, err := os.OpenFile(c.path+"/client-key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer keyOut.Close()
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(clientPrivKey)})
 
 	return nil
 }
