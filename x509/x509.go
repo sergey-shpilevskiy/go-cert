@@ -78,7 +78,7 @@ func (c *CertGenerator) GenerateCA(name pkix.Name) error {
 	defer certOut.Close()
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: caBytes})
 
-	keyOut, err := os.OpenFile(c.path+CAKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(c.path+CAKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (c *CertGenerator) GenerateServerCert(serverTemplate x509.Certificate) erro
 	defer certOut.Close()
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: serverBytes})
 
-	keyOut, err := os.OpenFile(c.path+ServerKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(c.path+ServerKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func (c *CertGenerator) GenerateClientCert(clientTemplate x509.Certificate) erro
 	defer certOut.Close()
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: clientBytes})
 
-	keyOut, err := os.OpenFile(c.path+ClientKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(c.path+ClientKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
