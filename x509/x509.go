@@ -122,7 +122,8 @@ func (c *CertGenerator) LoadCA() error {
 // 2. Generate web server's private key and certificate signing request (CSR)
 // 3. Use CA's private key to sign web server's CSR and get back the signed certificate
 // Generate a Certificate
-func (c *CertGenerator) GenerateServerCert(name pkix.Name, serverTemplate x509.Certificate) error {
+func (c *CertGenerator) GenerateServerCert(serverTemplate x509.Certificate) error {
+	serverTemplate.NotAfter = c.notAfter
 	// Read the CA certificate and private key
 	if err := c.LoadCA(); err != nil {
 		return err
@@ -160,7 +161,9 @@ func (c *CertGenerator) GenerateServerCert(name pkix.Name, serverTemplate x509.C
 
 // 4. Generate client's private key and certificate signing request (CSR)
 // 5. Use CA's private key to sign client's CSR and get back the signed certificate
-func (c *CertGenerator) GenerateClientCert(name pkix.Name, clientTemplate x509.Certificate) error {
+func (c *CertGenerator) GenerateClientCert(clientTemplate x509.Certificate) error {
+	clientTemplate.NotAfter = c.notAfter
+
 	// Read the CA certificate and private key
 	if err := c.LoadCA(); err != nil {
 		return err
